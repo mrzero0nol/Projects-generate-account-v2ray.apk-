@@ -46,17 +46,16 @@
             margin-bottom: 20px;
         }
 
-        textarea {
+        select {
             width: 100%;
-            height: 150px;
+            padding: 10px;
             background-color: rgba(255, 255, 255, 0.1);
             border: 1px solid #00ffff;
             border-radius: 8px;
             color: #f0f0f0;
-            padding: 10px;
             font-size: 14px;
-            box-sizing: border-box;
             margin-bottom: 20px;
+            box-sizing: border-box;
         }
 
         button {
@@ -70,6 +69,7 @@
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.3s ease;
+            margin: 5px;
         }
 
         button:hover {
@@ -96,7 +96,8 @@
     <canvas id="bg-canvas"></canvas>
     <div class="container">
         <h1>V2Ray Config Generator</h1>
-        <textarea id="proxy-list" placeholder="Paste your proxy list here..."></textarea>
+        <button id="load-proxies-btn">Load Proxies</button>
+        <select id="proxy-select" disabled></select>
         <button id="generate-btn">Generate</button>
         <div id="result"></div>
     </div>
@@ -144,58 +145,67 @@
         });
 
         // Config Generation Logic
-        document.getElementById('generate-btn').addEventListener('click', () => {
-            const proxyInput = document.getElementById('proxy-list').value.trim();
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = '';
+        document.getElementById('load-proxies-btn').addEventListener('click', async () => {
+            const proxySelect = document.getElementById('proxy-select');
+            const loadBtn = document.getElementById('load-proxies-btn');
+            loadBtn.textContent = 'Loading...';
+            loadBtn.disabled = true;
 
-            if (!proxyInput) {
-                resultDiv.innerHTML = 'Please paste a proxy list.';
-                return;
-            }
-
-            let proxies = [];
             try {
-                // Try parsing as JSON
-                const jsonData = JSON.parse(proxyInput);
-                for (const country in jsonData) {
-                    proxies = proxies.concat(jsonData[country]);
-                }
-            } catch (e) {
-                // Fallback to parsing as plain text
-                proxies = proxyInput.split('\\n').map(line => {
+                const response = await fetch('https://corsproxy.io/?' + encodeURIComponent('https://raw.githubusercontent.com/mrzero0nol/My-v2ray/refs/heads/main/proxyList.txt'));
+                const text = await response.text();
+                const proxies = text.split('\n').map(line => {
                     const parts = line.split(',');
                     if (parts.length >= 2) {
-                        return `${parts[0]}:${parts[1]}`;
+                        return {
+                            value: `${parts[0]}:${parts[1]}`,
+                            text: `${parts[2]} - ${parts[0]}`
+                        };
                     }
                     return null;
                 }).filter(p => p);
-            }
 
-            if (proxies.length === 0) {
-                resultDiv.innerHTML = 'No valid proxies found.';
+                proxySelect.innerHTML = '';
+                proxies.forEach(proxy => {
+                    const option = document.createElement('option');
+                    option.value = proxy.value;
+                    option.textContent = proxy.text;
+                    proxySelect.appendChild(option);
+                });
+                proxySelect.disabled = false;
+                loadBtn.textContent = 'Load Proxies';
+            } catch (error) {
+                console.error('Error fetching proxy list:', error);
+                alert('Failed to load proxy list.');
+                loadBtn.textContent = 'Load Proxies';
+                loadBtn.disabled = false;
+            }
+        });
+
+        document.getElementById('generate-btn').addEventListener('click', () => {
+            const proxySelect = document.getElementById('proxy-select');
+            const resultDiv = document.getElementById('result');
+            const selectedProxy = proxySelect.value;
+
+            if (!selectedProxy) {
+                resultDiv.innerHTML = 'Please select a proxy.';
                 return;
             }
 
-            const configs = [];
-            proxies.forEach(proxy => {
-                const [host, port] = proxy.split(':');
-                const sni = `df.game.naver.com.ukonskypea.dpdns.org`;
-                const path = `/${host}-${port}`;
-                const uuid = '0e4c390d-64c5-4448-903e-0f3220f6b551'; // Example UUID
+            const [host, port] = selectedProxy.split(':');
+            const sni = `df.game.naver.com.ukonskypea.dpdns.org`;
+            const path = `/${host}-${port}`;
+            const uuid = '0e4c390d-64c5-4448-903e-0f3220f6b551'; // Example UUID
 
-                // Trojan Config
-                const trojanConfig = `trojan://${uuid}@${host}:${port}/?type=ws&host=${sni}&path=${path}&security=tls&sni=${sni}#ID%20Amazon.com%20%5B${host}%5D`;
-                configs.push(trojanConfig);
+            // Trojan Config
+            const trojanConfig = `trojan://${uuid}@${host}:${port}/?type=ws&host=${sni}&path=${path}&security=tls&sni=${sni}#ID%20Amazon.com%20%5B${host}%5D`;
 
-                // VLESS Config
-                const vlessUuid = 'e7dde2ed-79e8-4696-8286-261b588cf068'; // Example VLESS UUID
-                const vlessSni = `df.game.naver.com.farqon-group.biz.id`;
-                const vlessConfig = `vless://${vlessUuid}@${host}:${port}/?type=ws&encryption=none&flow=&host=${vlessSni}&path=${path}&security=tls&sni=${vlessSni}#SG%20Alibaba%20Cloud%20-%20SG%20%5B${host}%5D`;
-                configs.push(vlessConfig);
-            });
+            // VLESS Config
+            const vlessUuid = 'e7dde2ed-79e8-4696-8286-261b588cf068'; // Example VLESS UUID
+            const vlessSni = `df.game.naver.com.farqon-group.biz.id`;
+            const vlessConfig = `vless://${vlessUuid}@${host}:${port}/?type=ws&encryption=none&flow=&host=${vlessSni}&path=${path}&security=tls&sni=${vlessSni}#SG%20Alibaba%20Cloud%20-%20SG%20%5B${host}%5D`;
 
-            resultDiv.textContent = configs.join('\n');
+            resultDiv.textContent = `${trojanConfig}\n${vlessConfig}`;
         });
     </script>
 </body>
